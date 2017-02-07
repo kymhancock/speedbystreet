@@ -1,0 +1,35 @@
+select dr.group_fullname as 'Group Fullname'
+                , dr.group_name as 'Group Name'
+                , dr.name as 'Driver Name'
+                , date_format(curdate() - interval 7 day, '%Y-%m-%d') as 'Week Start'
+                , date_format(curdate(), '%Y-%m-%d') as 'Week End'
+                , round(((sum(agg.odometer6)/100) * 1.60934), 2) as 'Kilometers Driven'
+                , round(sum(agg.odometer6)/100 , 2) as 'Miles Driven'
+                , sum(agg.seatbeltEvents) as 'Seatbelt Events'
+                , sum(agg.aggressiveAccelEvents) as 'Hard Acceleration Events'
+                , sum(agg.idleLoEvents + agg.idleHiEvents) as 'Over Idle Events'
+                , sum(IfNull(rev.rpmEvents,0)) as 'Over Rev Events'
+                , sum(agg.aggressiveBrakeEvents) as 'Hard Brake Events'
+                , sum(agg.aggressiveBumpEvents) as 'Hard Bump Events'
+                , sum(agg.aggressiveLeftEvents + agg.aggressiveRightEvents) as 'Unsafe Turn Events'
+                , sum(agg.speedEvents1) + sum(agg.speedEvents2) + sum(agg.speedEvents3) + sum(agg.speedEvents4) + sum(agg.speedEvents5) as 'Speeding Events'
+                        from driver dr
+                        join vehicle v on dr.driver_id = v.driver_id
+                        join agg on agg.driver_id = dr.driver_id
+                        left join (
+                                select n.driver_id, n.vehicle_id, date_format(convert_TZ(n.time, 'GMT', dr.tzName), '%M-%y') aggDate, count(*) rpmEvents
+                                from note n
+                                join driver dr on n.driver_id = dr.driver_id
+                                        where n.account_id = 52
+                                        and n.type in (4, 14, 49, 58, 93, 191, 192)
+                                        and n.time >= date_format(current_date, '%Y-%m-%01') - interval 7 day
+                                        and n.time < date_format(current_date, '%Y-%m-%01')
+                                                group by 1, 2, 3) rev on rev.vehicle_id = v.vehicle_id and rev.driver_id =dr.driver_id and agg.aggDate = rev.aggDate
+
+                                where dr.account_id = 52
+                                and dr.group_fullname like 'inthinc/Shell/Canada/Greater Deep Basin/%' 
+                                and dr.status_id not in (3, 4)
+                                and agg.aggDate >= curdate() - interval 7 day
+                                and agg.aggDate < curdate()
+                                        group by dr.group_fullname, dr.name
+                                        order by dr.group_fullname, dr.name
